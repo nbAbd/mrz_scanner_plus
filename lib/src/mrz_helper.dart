@@ -82,7 +82,7 @@ class MRZHelper {
 
     final mrzLines = _filterAvaliableLines(ableToScanText);
     for (final mrz2Line in mrzLines) {
-      debugPrint('OCR:\N${mrz2Line.join('\n')}');
+      debugPrint('OCR:\n${mrz2Line.join('\n')}');
       var lines = MRZHelper.getFinalListToParse(mrz2Line);
       if (lines != null && lines.isNotEmpty) {
         try {
@@ -97,14 +97,28 @@ class MRZHelper {
     return null;
   }
 
+  /// FIXED: Support all three MRZ formats (TD1, TD2, TD3)
   static List<List<String>> _filterAvaliableLines(List<String> lines) {
     final avaliableLines = <List<String>>[];
-    final mrz44Lines = <String>[];
+    final mrz30Lines = <String>[];  // TD1 - 3 lines of 30 chars each
+    final mrz36Lines = <String>[];  // TD2 - 2 lines of 36 chars each
+    final mrz44Lines = <String>[];  // TD3 - 2 lines of 44 chars each
 
     var containSpecialSymbolLine = '<';
 
     for (final line in lines) {
       final length = line.length;
+      
+      if (length == 30) {
+        mrz30Lines.add(line);
+        continue;
+      }
+      
+      if (length == 36) {
+        mrz36Lines.add(line);
+        continue;
+      }
+      
       if (length == 44) {
         mrz44Lines.add(line);
         continue;
@@ -118,11 +132,24 @@ class MRZHelper {
       }
     }
 
+    // TD1 format: 3 lines of 30 characters
+    if (mrz30Lines.length >= 3) {
+      avaliableLines.add(mrz30Lines.sublist(0, 3));
+    }
+
+    // TD2 format: 2 lines of 36 characters
+    if (mrz36Lines.length >= 2) {
+      avaliableLines.add(mrz36Lines.sublist(0, 2));
+    }
+
+    // TD3 format: 2 lines of 44 characters (with fallback for incomplete data)
     if (mrz44Lines.isNotEmpty && mrz44Lines.length == 1) {
       mrz44Lines.insert(0, '$containSpecialSymbolLine${'<' * (44 - containSpecialSymbolLine.length)}');
     }
 
-    if (mrz44Lines.length >= 2) avaliableLines.add(mrz44Lines);
+    if (mrz44Lines.length >= 2) {
+      avaliableLines.add(mrz44Lines);
+    }
 
     return avaliableLines;
   }
