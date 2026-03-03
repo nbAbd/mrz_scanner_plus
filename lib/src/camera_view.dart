@@ -40,6 +40,7 @@ class CameraView extends StatefulWidget {
   final MrzCameraController? controller;
   final Widget? photoButton;
   final TextRecognitionScript script;
+  final MRZDocumentType documentType;
 
   const CameraView({
     super.key,
@@ -52,6 +53,7 @@ class CameraView extends StatefulWidget {
     this.mode = CameraMode.scan,
     this.photoButton,
     this.script = TextRecognitionScript.latin,
+    this.documentType = MRZDocumentType.passport,
   });
 
   @override
@@ -130,26 +132,50 @@ class _CameraViewState extends State<CameraView> with SingleTickerProviderStateM
     });
   }
 
-  InputImage _processImageForMlKit(CameraImage image) {
-    final WriteBuffer allBytes = WriteBuffer();
-    for (final Plane plane in image.planes) {
-      allBytes.putUint8List(plane.bytes);
-    }
-    final bytes = allBytes.done().buffer.asUint8List();
-
-    final Size imageSize = Size(image.width.toDouble(), image.height.toDouble());
-    const InputImageRotation imageRotation = InputImageRotation.rotation0deg;
-
-    return InputImage.fromBytes(
-      bytes: bytes,
-      metadata: InputImageMetadata(
-        size: imageSize,
-        rotation: imageRotation,
-        format: Platform.isAndroid ? InputImageFormat.nv21 : InputImageFormat.bgra8888,
-        bytesPerRow: image.planes.first.bytesPerRow,
-      ),
-    );
+InputImage _processImageForMlKit(CameraImage image) {
+  final WriteBuffer allBytes = WriteBuffer();
+  for (final Plane plane in image.planes) {
+    allBytes.putUint8List(plane.bytes);
   }
+  final bytes = allBytes.done().buffer.asUint8List();
+
+  final Size imageSize = Size(image.width.toDouble(), image.height.toDouble());
+
+  // Detect device orientation dynamically instead of hardcoding
+  final deviceOrientation = _controller?.value.deviceOrientation;
+  InputImageRotation imageRotation;
+
+  if (Platform.isIOS) {
+    imageRotation = InputImageRotation.rotation90deg;
+  } else {
+    // Android: map device orientation to ML Kit rotation
+    switch (deviceOrientation) {
+      case DeviceOrientation.landscapeLeft:
+        imageRotation = InputImageRotation.rotation0deg;
+        break;
+      case DeviceOrientation.landscapeRight:
+        imageRotation = InputImageRotation.rotation180deg;
+        break;
+      case DeviceOrientation.portraitDown:
+        imageRotation = InputImageRotation.rotation270deg;
+        break;
+      default:  // portraitUp
+        imageRotation = InputImageRotation.rotation90deg;
+    }
+  }
+
+  return InputImage.fromBytes(
+    bytes: bytes,
+    metadata: InputImageMetadata(
+      size: imageSize,
+      rotation: imageRotation,
+      format: Platform.isAndroid
+          ? InputImageFormat.nv21
+          : InputImageFormat.bgra8888,
+      bytesPerRow: image.planes.first.bytesPerRow,
+    ),
+  );
+}
 
   @override
   void dispose() {
@@ -198,6 +224,7 @@ class _CameraViewState extends State<CameraView> with SingleTickerProviderStateM
                   painter: MaskPainter(
                     animationValue: _animationController.value,
                     indicatorColor: widget.indicatorColor ?? const Color(0xFFE1DED7),
+                    documentType: widget.documentType,
                   ),
                   size: Size.infinite,
                   child: Container(),
@@ -210,6 +237,7 @@ class _CameraViewState extends State<CameraView> with SingleTickerProviderStateM
             painter: MaskPainter(
               animationValue: null,
               indicatorColor: widget.indicatorColor ?? const Color(0xFFE1DED7),
+              documentType: widget.documentType,
             ),
             size: Size.infinite,
             child: Container(),

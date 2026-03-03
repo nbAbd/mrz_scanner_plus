@@ -1,26 +1,41 @@
 import 'dart:math';
 import 'package:flutter/material.dart';
 
+enum MRZDocumentType {
+  passport, idCard
+}
+
 class MaskPainter extends CustomPainter {
   final double? animationValue;
   final Color indicatorColor;
   final Color overlayColor;
+  final MRZDocumentType documentType;
+  
 
   const MaskPainter({
     this.animationValue,
     this.indicatorColor = const Color(0xFFE1DED7),
     this.overlayColor = Colors.black54,
+    this.documentType = MRZDocumentType.passport,
   });
 
   @override
   void paint(Canvas canvas, Size size) {
+
+
     final paint = Paint()
       ..color = overlayColor
       ..style = PaintingStyle.fill;
 
-    // 护照标准尺寸比例为1.42:1
+    
+    // ID-1 (TD1): 85.6mm × 54mm → ratio 85.6/54 ≈ 1.585
+    // ID-3 (TD3): passport booklet opened → ratio varies, cover ≈ 1.42
+    final double aspectRatio = documentType == MRZDocumentType.idCard
+        ? 1.586
+        : 1.42;
+
     final double cardWidth = size.width * 0.85;
-    final double cardHeight = cardWidth / 1.42;
+    final double cardHeight = cardWidth / aspectRatio;
     final double left = (size.width - cardWidth) / 2;
     final double top = (size.height - cardHeight) / 2;
 
