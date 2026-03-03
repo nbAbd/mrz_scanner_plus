@@ -4,34 +4,34 @@ import 'package:mrz_scanner_plus/src/mrz_parser/mrz_result.dart';
 
 class MRZHelper {
   static List<String>? getFinalListToParse(List<String> ableToScanTextList) {
-  if (ableToScanTextList.isEmpty) return null;
+    if (ableToScanTextList.isEmpty) return null;
 
-  final lineLength = ableToScanTextList.first.length;
+    final lineLength = ableToScanTextList.first.length;
 
-  // TD1 needs 3 lines, TD2/TD3 need 2
-  final expectedCount = switch (lineLength) {
-    30 => 3,
-    36 => 2,
-    44 => 2,
-    _ => null,
-  };
+    // TD1 needs 3 lines, TD2/TD3 need 2
+    final expectedCount = switch (lineLength) {
+      30 => 3,
+      36 => 2,
+      44 => 2,
+      _ => null,
+    };
 
-  if (expectedCount == null) return null;
-  if (ableToScanTextList.length < expectedCount) return null;
+    if (expectedCount == null) return null;
+    if (ableToScanTextList.length < expectedCount) return null;
 
-  final linesToUse = ableToScanTextList.length > expectedCount
-      ? ableToScanTextList.sublist(ableToScanTextList.length - expectedCount)
-      : ableToScanTextList;
+    final linesToUse = ableToScanTextList.length > expectedCount
+        ? ableToScanTextList.sublist(ableToScanTextList.length - expectedCount)
+        : ableToScanTextList;
 
-  for (final e in linesToUse) {
-    if (e.length != lineLength) return null;
+    for (final e in linesToUse) {
+      if (e.length != lineLength) return null;
+    }
+
+    final supportedDocTypes = {'A', 'C', 'P', 'V', 'I'};
+    if (!supportedDocTypes.contains(linesToUse.first[0])) return null;
+
+    return [...linesToUse];
   }
-
-  final supportedDocTypes = {'A', 'C', 'P', 'V', 'I'};
-  if (!supportedDocTypes.contains(linesToUse.first[0])) return null;
-
-  return [...linesToUse];
-}
 
   static String testTextLine(String text) {
     if (text.contains('<')) {
@@ -106,59 +106,66 @@ class MRZHelper {
     return null;
   }
 
-  static List<List<String>> _filterAvaliableLines(List<String> lines) {
-  final avaliableLines = <List<String>>[];
+  static List<List<String>> _filterAvailableLines(List<String> lines) {
+    final availableLines = <List<String>>[];
+    final mrz44Lines = <String>[];
+    final mrz36Lines = <String>[];
+    final mrz30Lines = <String>[];
 
-  final mrz44Lines = <String>[];  // TD3 (passport)
-  final mrz36Lines = <String>[];  // TD2
-  final mrz30Lines = <String>[];  // TD1 (Belgian ID, etc.)
+    var fallback44 = '<';
+    var fallback36 = '<';
+    var fallback30 = '<';
 
-  var containSpecialSymbolLine = '<';
-
-  for (final line in lines) {
-    final length = line.length;
-
-    if (length == 44) {
-      mrz44Lines.add(line);
-      continue;
+    for (final line in lines) {
+      final length = line.length;
+      if (length == 44) {
+        mrz44Lines.add(line);
+        continue;
+      }
+      if (length == 36) {
+        mrz36Lines.add(line);
+        continue;
+      }
+      if (length == 30) {
+        mrz30Lines.add(line);
+        continue;
+      }
+      if (line.contains('<')) {
+        final isEmpty = line.replaceAll('<', '').trim().isEmpty;
+        if (!isEmpty) {
+          if (length > 36) {
+            fallback44 = line;
+          } else if (length > 30) {
+            fallback36 = line;
+          } else {
+            fallback30 = line;
+          }
+        }
+      }
     }
-    if (length == 36) {
-      mrz36Lines.add(line);
-      continue;
+
+    // TD3 (44-char, 2 lines)
+    if (mrz44Lines.length == 1 && fallback44 != '<') {
+      mrz44Lines.insert(0, fallback44 + '<' * (44 - fallback44.length));
     }
-    if (length == 30) {
-      mrz30Lines.add(line);
-      continue;
+    if (mrz44Lines.length >= 2) availableLines.add(mrz44Lines);
+
+    // TD2 (36-char, 2 lines)
+    if (mrz36Lines.length == 1 && fallback36 != '<') {
+      mrz36Lines.insert(0, fallback36 + '<' * (36 - fallback36.length));
+    }
+    if (mrz36Lines.length >= 2) availableLines.add(mrz36Lines);
+
+    // TD1 (30-char, 3 lines)
+    if (mrz30Lines.length >= 3) {
+      final td1Candidate = mrz30Lines.length > 3
+          ? mrz30Lines.sublist(mrz30Lines.length - 3)
+          : mrz30Lines;
+      availableLines.add(td1Candidate);
     }
 
-    if (line.contains('<')) {
-      final isEmpty = line.replaceAll('<', '').trim().isEmpty;
-      if (!isEmpty) containSpecialSymbolLine = line;
-    }
+    return availableLines;
   }
-
-  // TD3 — original logic preserved
-  if (mrz44Lines.isNotEmpty && mrz44Lines.length == 1) {
-    mrz44Lines.insert(
-      0,
-      '$containSpecialSymbolLine${'<' * (44 - containSpecialSymbolLine.length)}',
-    );
-  }
-  if (mrz44Lines.length >= 2) avaliableLines.add(mrz44Lines);
-
-  // TD2
-  if (mrz36Lines.length >= 2) avaliableLines.add(mrz36Lines);
-
-  // TD1 — THIS is what was missing for your Belgian ID
-  if (mrz30Lines.length >= 3) {
-    final td1Lines = mrz30Lines.length > 3
-        ? mrz30Lines.sublist(mrz30Lines.length - 3)
-        : mrz30Lines;
-    avaliableLines.add(td1Lines);
-  }
-
-  return avaliableLines;
-}
 
   static String _ifNotEnough(String text) {
     if (text.length > 36 && text.length < 44) {
